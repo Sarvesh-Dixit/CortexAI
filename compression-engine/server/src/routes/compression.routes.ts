@@ -16,13 +16,20 @@ const supervisor = new SupervisorAgent();
  * Core compression handler used by both /compress and /start.
  */
 async function runCompression(req: AuthRequest, res: Response) {
-  const { text, level = 'medium', documentType, llmProvider = 'openai', documentId } = req.body;
+  const {
+    text,
+    level = 'medium',
+    documentType,
+    llmProvider = 'openai',
+    documentId,
+    accuracyTarget = 0.95,
+  } = req.body;
 
   if (!text || text.trim().length === 0) {
     throw new AppError('Text is required for compression', 400);
   }
 
-  logger.info(`[Compression] Starting pipeline: user=${req.userId} level=${level}`);
+  logger.info(`[Compression] Starting pipeline: user=${req.userId} level=${level} target=${accuracyTarget}`);
 
   const workflowResult = await supervisor.orchestrate({
     text,
@@ -30,6 +37,7 @@ async function runCompression(req: AuthRequest, res: Response) {
     compressionLevel: level as CompressionLevel,
     llmProvider,
     filename: req.body.filename,
+    accuracyTarget,
   });
 
   if (workflowResult.status === 'failed') {
@@ -49,17 +57,21 @@ async function runCompression(req: AuthRequest, res: Response) {
       compressedTokens: analytics.compressedTokens,
       compressionRatio: analytics.compressionRatio,
       semanticScore: analytics.semanticScore,
-      compressionLevel: level,
-      llmProvider,
-      documentType: documentType || workflowResult.documentType,
+      compressionLevel: workflowResult.compressionLevel as any,
+      requestedLevel: level as any,
+      llmProvider: llmProvider as any,
+      documentType: (documentType || workflowResult.documentType) as any,
       language: workflowResult.detectedLanguage,
       originalCost: analytics.originalCost,
       compressedCost: analytics.compressedCost,
       costSavings: analytics.costSavings,
-      latencyOriginal: analytics.originalTokens * 0.05,
-      latencyCompressed: analytics.compressedTokens * 0.05,
+      latencyOriginalMs: analytics.originalTokens * 0.05,
+      latencyCompressedMs: analytics.compressedTokens * 0.05,
       latencyImprovement: analytics.latencyImprovement,
-      processingTime: workflowResult.totalExecutionTimeMs,
+      processingTimeMs: workflowResult.totalExecutionTimeMs,
+      accuracyTarget,
+      metTarget: analytics.semanticScore >= accuracyTarget,
+      adaptiveFallback: level !== workflowResult.compressionLevel,
     },
   });
 
@@ -96,6 +108,10 @@ async function runCompression(req: AuthRequest, res: Response) {
 
   logger.info(`[Compression] Complete: ratio=${(analytics.compressionRatio * 100).toFixed(1)}% time=${workflowResult.totalExecutionTimeMs}ms`);
 
+  const requestedLevel = level;
+  const actualLevel = workflowResult.compressionLevel;
+  const adaptiveFallback = requestedLevel !== actualLevel;
+
   res.json({
     success: true,
     data: {
@@ -114,6 +130,13 @@ async function runCompression(req: AuthRequest, res: Response) {
       latency: workflowResult.totalExecutionTimeMs,
       removedSections: [],
       modifiedSections: [],
+      quality: {
+        accuracyTarget,
+        requestedLevel,
+        actualLevel,
+        adaptiveFallback,
+        metTarget: analytics.semanticScore >= accuracyTarget,
+      },
       pipeline: {
         totalTimeMs: workflowResult.totalExecutionTimeMs,
         agentsExecuted: workflowResult.agentResults.length,

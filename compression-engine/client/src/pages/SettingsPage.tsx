@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Save, Plus, Trash2, Key, User as UserIcon, Palette, Bell, Zap } from 'lucide-react';
 import { SettingsService, AuthService } from '../services';
 import api from '../lib/api';
-import { useAuthStore } from '../store';
+import { useAuthStore, useUiStore } from '../store';
 import { LLM_PROVIDERS } from '../lib/providers';
 import { PageHeader } from '../components/shared';
 import { Card, Button, Input, Select, Switch, Badge, ConfirmDialog } from '../components/ui';
@@ -12,9 +12,13 @@ import type { ApiKeyRecord } from '../types';
 
 export default function SettingsPage() {
   const { user, setUser } = useAuthStore();
+  const currentTheme = useUiStore((s) => s.theme);
+  const setTheme = useUiStore((s) => s.setTheme);
 
   const [settings, setSettings] = useState({
-    theme: 'dark',
+    // Initialize theme from the currently applied UI store value so the
+    // dropdown always reflects what's visible on screen.
+    theme: currentTheme,
     language: 'en',
     preferredLlm: 'openai',
     defaultCompression: 'medium',
@@ -40,8 +44,10 @@ export default function SettingsPage() {
   const loadSettings = async () => {
     try {
       const data = await SettingsService.get();
+      // Prefer the UI store's current theme (what's actually applied), but
+      // fall back to the DB value if the store hasn't loaded yet.
       setSettings({
-        theme: data.theme || 'dark',
+        theme: (currentTheme || data.theme || 'dark') as 'dark' | 'light',
         language: data.language || 'en',
         preferredLlm: data.preferredLlm || 'openai',
         defaultCompression: data.defaultCompression || 'medium',
@@ -55,8 +61,14 @@ export default function SettingsPage() {
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
+      // Persist to DB so preferences survive across devices
       await SettingsService.update(settings);
-      toast.success('Settings saved');
+      // Apply the theme locally so it takes effect immediately.
+      // useTheme() will pick this up and swap the CSS class on <html>.
+      if (settings.theme === 'dark' || settings.theme === 'light') {
+        setTheme(settings.theme);
+      }
+      toast.success('Preferences saved');
     } catch {
       toast.error('Failed to save settings');
     } finally {
@@ -175,7 +187,12 @@ export default function SettingsPage() {
             <Select
               label="Theme"
               value={settings.theme}
-              onChange={(e) => setSettings({ ...settings, theme: e.target.value })}
+              onChange={(e) => {
+                const value = e.target.value as 'dark' | 'light';
+                setSettings({ ...settings, theme: value });
+                // Apply immediately so users see the change before hitting Save
+                setTheme(value);
+              }}
               options={[
                 { value: 'dark', label: 'Dark' },
                 { value: 'light', label: 'Light' },

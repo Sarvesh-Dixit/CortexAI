@@ -104,6 +104,15 @@ export class ImportanceScoringNode implements AgentNode {
         reasons.push('position_importance');
       }
 
+      // FILLER-HEAVY penalty — if the sentence is mostly wrapped in
+      // meaningless phrases, its content-to-fluff ratio is low. This is
+      // the primary lever that lets aggressive compression remove
+      // low-value verbose sentences without touching real content.
+      if (this.isMostlyFiller(sentence)) {
+        score -= 0.35;
+        reasons.push('filler_heavy');
+      }
+
       // Redundancy penalty (informed by similarity agent)
       if (state.similarityResult) {
         if (state.similarityResult.redundantSentenceIndices.includes(index)) {
@@ -157,5 +166,43 @@ export class ImportanceScoringNode implements AgentNode {
     return /\b[a-z][a-zA-Z0-9]*[A-Z]\w*\b/.test(sentence) ||
       /\b\w+_\w+\b/.test(sentence) ||
       /\b\w+\.\w+\(/.test(sentence);
+  }
+
+  /**
+   * Detects sentences that consist mostly of filler wrappers with little
+   * actual content. Used to demote low-value sentences during importance
+   * scoring so they become candidates for removal.
+   */
+  private isMostlyFiller(sentence: string): boolean {
+    const fillerPatterns = [
+      /\b(basically|essentially|actually|literally|obviously|clearly|certainly|definitely|undoubtedly|honestly|frankly)\b/i,
+      /\bas a matter of fact\b/i,
+      /\bneedless to say\b/i,
+      /\bit goes without saying\b/i,
+      /\bas previously mentioned\b/i,
+      /\bas mentioned (earlier|before|above)\b/i,
+      /\bin fact\b/i,
+      /\bto be honest\b/i,
+      /\ball things considered\b/i,
+      /\btaking everything into account\b/i,
+      /\bit is (important |worth )?(mentioning |noting )(that )?/i,
+      /\bit should be noted (that)?/i,
+      /\bhaving said that\b/i,
+      /\bthat (being |having )?said\b/i,
+    ];
+
+    const hasFiller = fillerPatterns.some((p) => p.test(sentence));
+    if (!hasFiller) return false;
+
+    // Strip filler and check remaining content length
+    let stripped = sentence;
+    for (const p of fillerPatterns) {
+      stripped = stripped.replace(p, '');
+    }
+    stripped = stripped.replace(/[,.!?;:]/g, ' ').replace(/\s+/g, ' ').trim();
+    const contentWords = stripped.split(/\s+/).filter((w) => w.length > 2);
+
+    // Less than 6 content words → mostly filler
+    return contentWords.length < 6;
   }
 }

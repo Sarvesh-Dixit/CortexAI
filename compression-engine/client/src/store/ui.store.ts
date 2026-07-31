@@ -8,6 +8,7 @@ interface UiState {
   sidebarCollapsed: boolean;
   searchOpen: boolean;
   notificationsOpen: boolean;
+  setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (v: boolean) => void;
@@ -22,6 +23,7 @@ export const useUiStore = create<UiState>()(
       sidebarCollapsed: false,
       searchOpen: false,
       notificationsOpen: false,
+      setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),

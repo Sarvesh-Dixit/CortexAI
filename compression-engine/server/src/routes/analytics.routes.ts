@@ -335,16 +335,16 @@ analyticsRouter.get('/latency', authenticate, async (req: AuthRequest, res: Resp
     const compressions = await prisma.compression.findMany({
       where: { userId: req.userId },
       select: {
-        latencyOriginal: true, latencyCompressed: true,
-        latencyImprovement: true, processingTime: true, createdAt: true,
+        latencyOriginalMs: true, latencyCompressedMs: true,
+        latencyImprovement: true, processingTimeMs: true, createdAt: true,
       },
     });
 
-    const totalOriginalLatency = compressions.reduce((s, c) => s + (c.latencyOriginal || 0), 0);
-    const totalCompressedLatency = compressions.reduce((s, c) => s + (c.latencyCompressed || 0), 0);
+    const totalOriginalLatency = compressions.reduce((s, c) => s + (c.latencyOriginalMs || 0), 0);
+    const totalCompressedLatency = compressions.reduce((s, c) => s + (c.latencyCompressedMs || 0), 0);
     const totalTimeSaved = totalOriginalLatency - totalCompressedLatency;
     const avgProcessingTime = compressions.length > 0
-      ? compressions.reduce((s, c) => s + (c.processingTime || 0), 0) / compressions.length : 0;
+      ? compressions.reduce((s, c) => s + (c.processingTimeMs || 0), 0) / compressions.length : 0;
 
     res.json({
       success: true,

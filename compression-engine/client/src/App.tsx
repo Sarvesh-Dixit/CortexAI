@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/auth.store';
+import { useUiStore } from './store';
 import { AuthService } from './services';
 import { useTheme } from './hooks';
 import { Layout } from './components/layout';
@@ -35,6 +36,7 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const { isAuthenticated, setUser } = useAuthStore();
+  const setTheme = useUiStore((s) => s.setTheme);
 
   // Apply the persisted theme to <html> on mount and every change
   useTheme();
@@ -42,12 +44,20 @@ export default function App() {
   useEffect(() => {
     if (isAuthenticated) {
       AuthService.me()
-        .then((user) => setUser(user))
+        .then((user) => {
+          setUser(user);
+          // Sync the saved theme from the user's profile so preferences
+          // follow them across devices. Local UI store still wins if the
+          // user just toggled the theme in this session.
+          if (user.theme === 'dark' || user.theme === 'light') {
+            setTheme(user.theme);
+          }
+        })
         .catch(() => {
           // Token invalid - will be handled by axios interceptor
         });
     }
-  }, [isAuthenticated, setUser]);
+  }, [isAuthenticated, setUser, setTheme]);
 
   return (
     <Routes>

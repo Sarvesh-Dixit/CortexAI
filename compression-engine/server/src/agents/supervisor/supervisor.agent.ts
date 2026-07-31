@@ -17,6 +17,9 @@
 import { v4 as uuid } from 'uuid';
 import { WorkflowState, CompressionLevel } from '../types';
 import { WorkflowGraph as Graph } from './graph';
+
+/** Ordered from most to least aggressive — used for adaptive fallback */
+const LEVEL_LADDER: CompressionLevel[] = ['extreme', 'high', 'medium', 'low'];
 import { InputProcessingNode } from '../nodes/input-processing.node';
 import { DocumentClassificationNode } from '../nodes/document-classification.node';
 import { LanguageDetectionNode } from '../nodes/language-detection.node';
@@ -98,17 +101,78 @@ export class SupervisorAgent {
     compressionLevel: CompressionLevel;
     llmProvider: string;
     filename?: string;
+    /** Minimum estimated accuracy required (0-1). If a run falls below this,
+     *  the supervisor automatically retries with a lighter compression level.
+     *  Default 0.95 to satisfy the >95% accuracy requirement. */
+    accuracyTarget?: number;
   }): Promise<WorkflowState> {
-    logger.info(`[Supervisor] Starting orchestration for user: ${input.userId}`);
+    const target = input.accuracyTarget ?? 0.95;
+    logger.info(`[Supervisor] Starting orchestration user=${input.userId} target=${target}`);
 
-    const initialState: WorkflowState = {
+    // Build the fallback ladder starting from the requested level, then
+    // progressively lighter levels. This guarantees the highest-compression
+    // result that still meets the accuracy target.
+    const requestedIdx = LEVEL_LADDER.indexOf(input.compressionLevel);
+    const startIdx = requestedIdx >= 0 ? requestedIdx : 1; // default to 'high'
+    const attempts: CompressionLevel[] = LEVEL_LADDER.slice(startIdx);
+
+    let lastState: WorkflowState | null = null;
+    let bestState: WorkflowState | null = null;
+
+    for (let i = 0; i < attempts.length; i++) {
+      const level = attempts[i];
+      const state = this.buildInitialState(input, level);
+      const result = await this.graph.execute(state);
+      lastState = result;
+
+      const accuracy = result.analytics?.semanticScore ?? 0;
+      logger.info(
+        `[Supervisor] Attempt ${i + 1}/${attempts.length} @ ${level}: accuracy=${(accuracy * 100).toFixed(1)}%, ` +
+        `ratio=${((result.analytics?.compressionRatio ?? 0) * 100).toFixed(1)}%`
+      );
+
+      // Track the highest-compression result that meets the target
+      if (accuracy >= target && !bestState) {
+        bestState = result;
+        break; // early exit: found a result that satisfies the requirement
+      }
+
+      // Track the best available even if none meets target
+      if (!bestState || accuracy > (bestState.analytics?.semanticScore ?? 0)) {
+        bestState = result;
+      }
+    }
+
+    const finalState = bestState || lastState!;
+    const finalAccuracy = finalState.analytics?.semanticScore ?? 0;
+    const finalLevel = finalState.compressionLevel;
+
+    if (finalLevel !== input.compressionLevel) {
+      logger.info(
+        `[Supervisor] Adaptive fallback: requested "${input.compressionLevel}" ` +
+        `→ used "${finalLevel}" to meet ${(target * 100).toFixed(0)}% accuracy target ` +
+        `(final: ${(finalAccuracy * 100).toFixed(1)}%)`
+      );
+    }
+
+    logger.info(`[Supervisor] Complete. Status: ${finalState.status}, ` +
+      `Agents executed: ${finalState.agentResults.length}, ` +
+      `Total time: ${finalState.totalExecutionTimeMs}ms`);
+
+    return finalState;
+  }
+
+  private buildInitialState(
+    input: { text: string; userId: string; llmProvider: string; filename?: string },
+    level: CompressionLevel
+  ): WorkflowState {
+    return {
       id: uuid(),
       userId: input.userId,
       originalText: input.text,
       filename: input.filename,
-      compressionLevel: input.compressionLevel,
+      compressionLevel: level,
       llmProvider: input.llmProvider,
-
       processedText: '',
       documentType: 'text',
       detectedLanguage: 'english',
@@ -119,11 +183,9 @@ export class SupervisorAgent {
       codeAnalysisResult: null,
       logAnalysisResult: null,
       importanceScores: [],
-
       compressedText: '',
       validation: null,
       analytics: null,
-
       agentResults: [],
       currentAgent: 'supervisor',
       startTime: Date.now(),
@@ -132,13 +194,5 @@ export class SupervisorAgent {
       status: 'running',
       error: null,
     };
-
-    const finalState = await this.graph.execute(initialState);
-
-    logger.info(`[Supervisor] Orchestration complete. Status: ${finalState.status}, ` +
-      `Agents executed: ${finalState.agentResults.length}, ` +
-      `Total time: ${finalState.totalExecutionTimeMs}ms`);
-
-    return finalState;
   }
 }

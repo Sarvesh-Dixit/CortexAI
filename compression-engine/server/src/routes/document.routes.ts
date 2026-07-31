@@ -98,8 +98,9 @@ documentRouter.post('/upload', authenticate, upload.single('file'), async (req: 
         characters,
         tokens,
         content,
-        documentType,
+        documentType: documentType as any,
         language,
+        storagePath: req.file.filename,
       },
     });
 

@@ -1,154 +1,405 @@
+// ═════════════════════════════════════════════════════════════════════════
+// CompressionAI — Production PostgreSQL Schema (Supabase-ready)
+//
+// Design principles:
+//   • Every user-owned row has a userId FK with ON DELETE CASCADE
+//   • Every foreign key column is UUID (no sequential IDs to guess)
+//   • Every user-scoped table has (userId, createdAt) compound index
+//   • All secrets (passwords, API keys) are encrypted before persistence
+//   • All timestamps are TIMESTAMPTZ so timezone info is preserved
+//   • Strict enums prevent bad values from ever reaching the DB
+// ═════════════════════════════════════════════════════════════════════════
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // pooled (PgBouncer, port 6543) — runtime
+  directUrl = env("DIRECT_URL")     // direct (port 5432) — migrations only
 }
 
-model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  password      String
-  name          String
-  avatar        String?
-  role          String   @default("developer")
-  theme         String   @default("dark")
-  language      String   @default("en")
-  preferredLlm  String   @default("openai")
-  defaultCompression String @default("medium")
-  isActive      Boolean  @default(true)
-  lastLogin     DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+// ─────────────────────────────────────────────────────────────────────────
+//  Enums
+// ─────────────────────────────────────────────────────────────────────────
 
-  apiKeys       ApiKey[]
-  compressions  Compression[]
-  documents     Document[]
+enum UserRole {
+  admin
+  developer
+  researcher
+  guest
+}
+
+enum CompressionLevel {
+  low
+  medium
+  high
+  extreme
+}
+
+enum CompressionStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum LlmProviderKind {
+  openai
+  gemini
+  claude
+  llama
+  deepseek
+  mistral
+  ollama
+  qwen
+  gemma
+}
+
+enum DocumentKind {
+  code
+  logs
+  research_paper
+  email
+  technical_documentation
+  chat_history
+  legal_document
+  json
+  markdown
+  csv
+  text
+  image
+  pdf
+  docx
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  User & Auth
+// ─────────────────────────────────────────────────────────────────────────
+
+model User {
+  id                 String   @id @default(uuid()) @db.Uuid
+  email              String   @unique @db.VarChar(255)
+  password           String   @db.Text                // bcrypt hash
+  name               String   @db.VarChar(100)
+  avatar             String?  @db.Text
+  role               UserRole @default(developer)
+
+  // Preferences
+  theme              String   @default("dark") @db.VarChar(10)
+  language           String   @default("en") @db.VarChar(10)
+  preferredLlm       LlmProviderKind @default(openai)
+  defaultCompression CompressionLevel @default(medium)
+
+  // Security / state
+  isActive           Boolean  @default(true)
+  emailVerified      Boolean  @default(false)
+  emailVerifiedAt    DateTime? @db.Timestamptz(6)
+  lastLoginAt        DateTime? @db.Timestamptz(6)
+  lastLoginIp        String?  @db.VarChar(45)         // IPv4 or IPv6
+  failedLoginCount   Int      @default(0)
+  lockedUntil        DateTime? @db.Timestamptz(6)
+
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(6)
+
+  // Relations — cascade delete removes ALL user data if account is deleted
   sessions      Session[]
+  apiKeys       ApiKey[]
+  documents     Document[]
+  compressions  Compression[]
   activityLogs  ActivityLog[]
+  ocrJobs       OcrJob[]
+  benchmarks    Benchmark[]
+
+  @@index([email])
+  @@index([role])
+  @@index([createdAt])
+  @@map("users")
 }
 
 model Session {
-  id           String   @id @default(uuid())
-  userId       String
-  token        String   @unique
-  refreshToken String   @unique
-  expiresAt    DateTime
-  createdAt    DateTime @default(now())
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  tokenHash      String   @unique @db.VarChar(128)   // SHA-256 of the JWT
+  refreshHash    String   @unique @db.VarChar(128)   // SHA-256 of refresh JWT
+  ipAddress      String?  @db.VarChar(45)
+  userAgent      String?  @db.Text
+  expiresAt      DateTime @db.Timestamptz(6)
+  revokedAt      DateTime? @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([tokenHash])
+  @@map("sessions")
 }
 
+model PasswordReset {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  tokenHash  String   @unique @db.VarChar(128)
+  usedAt     DateTime? @db.Timestamptz(6)
+  expiresAt  DateTime @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("password_resets")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  API Keys — encrypted at rest with AES-256-GCM
+// ─────────────────────────────────────────────────────────────────────────
+
 model ApiKey {
-  id        String   @id @default(uuid())
-  userId    String
-  provider  String
-  key       String
-  label     String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  provider      LlmProviderKind
+  label         String?  @db.VarChar(100)
+
+  // ciphertext is base64(iv || tag || encryptedKey) — never stored plaintext
+  encryptedKey  String   @db.Text
+  keyPrefix     String   @db.VarChar(12)              // first 4-8 chars for UI display
+  keyFingerprint String  @db.VarChar(64)              // SHA-256 of plaintext for duplicate check
+
+  isActive      Boolean  @default(true)
+  lastUsedAt    DateTime? @db.Timestamptz(6)
+  usageCount    Int      @default(0)
+
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // A user cannot store the same key twice for the same provider
+  @@unique([userId, provider, keyFingerprint])
+  @@index([userId, provider, isActive])
+  @@map("api_keys")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Documents & Compressions
+// ─────────────────────────────────────────────────────────────────────────
+
+model Document {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  filename       String   @db.VarChar(255)
+  originalName   String   @db.VarChar(255)
+  mimeType       String   @db.VarChar(100)
+  size           Int
+  documentType   DocumentKind
+  language       String?  @db.VarChar(20)
+
+  // Extracted content — may be large; use TEXT
+  content        String?  @db.Text
+  pages          Int?
+  words          Int?
+  characters     Int?
+  tokens         Int?
+
+  // Storage
+  storagePath    String   @db.Text                     // path in /uploads or S3 key
+  storageBucket  String?  @db.VarChar(100)             // S3 bucket if using cloud storage
+
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  compressions Compression[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, documentType])
+  @@map("documents")
 }
 
 model Compression {
-  id                 String   @id @default(uuid())
-  userId             String
-  documentId         String?
-  originalText       String
-  compressedText     String
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @db.Uuid
+  documentId         String?  @db.Uuid
+
+  originalText       String   @db.Text
+  compressedText     String   @db.Text
+
   originalTokens     Int
   compressedTokens   Int
   compressionRatio   Float
   semanticScore      Float
-  compressionLevel   String
-  llmProvider        String?
-  documentType       String
-  language           String?
+
+  compressionLevel   CompressionLevel
+  requestedLevel     CompressionLevel                  // may differ from actual due to adaptive fallback
+  llmProvider        LlmProviderKind?
+  llmModel           String?  @db.VarChar(100)
+  documentType       DocumentKind
+  language           String?  @db.VarChar(20)
+
   originalCost       Float
   compressedCost     Float
   costSavings        Float
-  latencyOriginal    Float?
-  latencyCompressed  Float?
+
+  latencyOriginalMs  Float?
+  latencyCompressedMs Float?
   latencyImprovement Float?
-  processingTime     Float?
-  status             String   @default("completed")
-  createdAt          DateTime @default(now())
+  processingTimeMs   Float?
+
+  accuracyTarget     Float    @default(0.95)
+  metTarget          Boolean  @default(true)
+  adaptiveFallback   Boolean  @default(false)
+
+  status             CompressionStatus @default(completed)
+  errorMessage       String?  @db.Text
+
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
 
   user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   document Document?          @relation(fields: [documentId], references: [id], onDelete: SetNull)
   metrics  CompressionMetric?
+  ocrJob   OcrJob?
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, documentType])
+  @@index([userId, compressionLevel])
+  @@index([userId, llmProvider])
+  @@map("compressions")
 }
 
 model CompressionMetric {
-  id               String   @id @default(uuid())
-  compressionId    String   @unique
-  tokensSaved      Int
-  wordsSaved       Int
-  charactersSaved  Int
-  moneySaved       Float
-  latencyReduced   Float
+  id                 String   @id @default(uuid()) @db.Uuid
+  compressionId      String   @unique @db.Uuid
+  tokensSaved        Int
+  wordsSaved         Int
+  charactersSaved    Int
+  moneySaved         Float
+  latencyReduced     Float
   semanticSimilarity Float
   reasoningRetention Float
-  estimatedAccuracy Float
-  approved         Boolean  @default(true)
-  agentCount       Int      @default(0)
-  createdAt        DateTime @default(now())
+  estimatedAccuracy  Float
+  approved           Boolean  @default(true)
+  agentCount         Int      @default(0)
+  agentTimings       Json?                             // detailed per-agent stats
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
 
   compression Compression @relation(fields: [compressionId], references: [id], onDelete: Cascade)
+
+  @@map("compression_metrics")
 }
 
-model Document {
-  id          String   @id @default(uuid())
-  userId      String
-  filename    String
-  originalName String
-  mimeType    String
-  size        Int
-  pages       Int?
-  words       Int?
-  characters  Int?
-  tokens      Int?
-  content     String?
-  documentType String
-  language    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// ─────────────────────────────────────────────────────────────────────────
+//  OCR & Benchmarks
+// ─────────────────────────────────────────────────────────────────────────
+
+model OcrJob {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @db.Uuid
+  compressionId      String?  @unique @db.Uuid        // linked when OCR feeds compression
+
+  filename           String   @db.VarChar(255)
+  mimeType           String   @db.VarChar(100)
+  size               Int
+  language           String   @default("eng") @db.VarChar(20)
+
+  extractedText      String   @db.Text
+  confidence         Float
+  words              Int
+  lines              Int
+  characters         Int
+  processingTimeMs   Float
+
+  // Vision-token savings estimate
+  estimatedVisionTokens Int
+  extractedTextTokens   Int
+  tokenReductionPct     Float
+
+  storagePath        String?  @db.Text                 // path to original image
+
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  compression Compression? @relation(fields: [compressionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("ocr_jobs")
+}
+
+model Benchmark {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @db.Uuid
+  provider           LlmProviderKind
+  model              String   @db.VarChar(100)
+
+  originalPrompt     String   @db.Text
+  compressedPrompt   String   @db.Text
+  originalResponse   String   @db.Text
+  compressedResponse String   @db.Text
+
+  originalInputTokens   Int
+  compressedInputTokens Int
+  originalOutputTokens  Int
+  compressedOutputTokens Int
+
+  originalLatencyMs     Float
+  compressedLatencyMs   Float
+  originalCost          Float
+  compressedCost        Float
+
+  fidelityScore         Float
+  cosineSimilarity      Float
+  entityPreservation    Float
+  fidelityVerdict       String @db.VarChar(20)
+
+  simulated             Boolean @default(false)
+
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  compressions Compression[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, provider])
+  @@map("benchmarks")
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Audit & Activity
+// ─────────────────────────────────────────────────────────────────────────
 
 model ActivityLog {
-  id         String   @id @default(uuid())
-  userId     String
-  action     String
-  resource   String?
-  resourceId String?
-  metadata   String?
-  ipAddress  String?
-  userAgent  String?
-  createdAt  DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  action     String   @db.VarChar(100)
+  resource   String?  @db.VarChar(100)
+  resourceId String?  @db.VarChar(100)
+  metadata   Json?
+  ipAddress  String?  @db.VarChar(45)
+  userAgent  String?  @db.Text
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, createdAt])
+  @@index([userId, createdAt(sort: Desc)])
   @@index([action])
+  @@map("activity_logs")
 }
 
-model LLMProviderConfig {
-  id              String   @id @default(uuid())
-  providerId      String   @unique
-  displayName     String
-  modelName       String
+// ─────────────────────────────────────────────────────────────────────────
+//  System configuration (admin-only)
+// ─────────────────────────────────────────────────────────────────────────
+
+model LlmProviderConfig {
+  id              String   @id @default(uuid()) @db.Uuid
+  providerId      String   @unique @db.VarChar(50)
+  displayName     String   @db.VarChar(100)
+  modelName       String   @db.VarChar(100)
+  availableModels String[] @db.VarChar(100)
   contextWindow   Int
   costPer1kInput  Float
   costPer1kOutput Float
-  speedRating     String
+  speedRating     String   @db.VarChar(20)
   isEnabled       Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("llm_provider_configs")
 }

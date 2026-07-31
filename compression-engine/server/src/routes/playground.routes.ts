@@ -5,6 +5,7 @@ import { CompressionLevel } from '../agents/types';
 import { estimateTokens, estimateCost } from '../utils/tokens';
 import { computeFidelity } from '../utils/fidelity';
 import { llmConnector } from '../services';
+import { ApiKeyService } from '../services/api-key.service';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
@@ -92,12 +93,10 @@ playgroundRouter.post('/benchmark', authenticate, async (req: AuthRequest, res: 
       };
     }
 
-    // Look up user's API key for this provider
-    const userKey = await prisma.apiKey.findFirst({
-      where: { userId: req.userId, provider, isActive: true },
-    });
+    // Resolve user's API key just-in-time (decrypts on demand, never logs it)
+    const resolved = await ApiKeyService.resolve(req.userId!, provider);
 
-    logger.info(`[Benchmark] Running parallel inference on ${provider}/${targetModel}`);
+    logger.info(`[Benchmark] Running parallel inference on ${provider}/${targetModel} (key=${resolved.source})`);
 
     // Run both prompts in parallel against the same LLM
     const benchmarkStart = Date.now();
@@ -108,7 +107,7 @@ playgroundRouter.post('/benchmark', authenticate, async (req: AuthRequest, res: 
         model: targetModel,
         temperature,
         maxTokens,
-        apiKey: userKey?.key,
+        apiKey: resolved.key || undefined,
       }),
       llmConnector.send({
         prompt: finalCompressed,
@@ -116,7 +115,7 @@ playgroundRouter.post('/benchmark', authenticate, async (req: AuthRequest, res: 
         model: targetModel,
         temperature,
         maxTokens,
-        apiKey: userKey?.key,
+        apiKey: resolved.key || undefined,
       }),
     ]);
     const totalWallTimeMs = Date.now() - benchmarkStart;

@@ -49,7 +49,9 @@ export class ActivityLogService {
           action: entry.action,
           resource: entry.resource,
           resourceId: entry.resourceId,
-          metadata: entry.metadata ? JSON.stringify(entry.metadata) : null,
+          // Postgres JSON field: undefined stays undefined, actual value goes as JSON.
+          // Never pass null literally — Prisma treats it differently for JSON columns.
+          metadata: entry.metadata as any,
           ipAddress: entry.ipAddress,
           userAgent: entry.userAgent,
         },

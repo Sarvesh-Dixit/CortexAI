@@ -1,38 +1,39 @@
 /**
  * LLM Provider Routes.
- * 
+ *
  * GET  /llm/providers   - List all available LLM providers with metadata
- * POST /llm/test        - Test connection to an LLM provider (with user's API key)
+ * POST /llm/test        - Test connection to an LLM provider (uses stored key)
  * POST /llm/compress    - Compress a prompt and send it to the target LLM
- * POST /llm/chat        - Direct chat with an LLM provider (proxied through their API key)
+ * POST /llm/chat        - Direct chat with an LLM provider
+ *
+ * All key resolution goes through ApiKeyService which decrypts just-in-time
+ * and enforces per-user ownership.
  */
 
 import { Router, Response, NextFunction } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { llmConnector } from '../services';
+import { ApiKeyService } from '../services/api-key.service';
 import { SupervisorAgent } from '../agents';
 import { CompressionLevel } from '../agents/types';
 import { estimateTokens, estimateCost } from '../utils/tokens';
 import { ActivityLogService } from '../services/activity-log.service';
 import { AppError } from '../middleware/errorHandler';
-import { prisma } from '../utils/prisma';
 import { logger } from '../utils/logger';
 
 export const llmRouter = Router();
 const supervisor = new SupervisorAgent();
 
-/**
- * GET /llm/providers - list all providers with metadata
- */
 llmRouter.get('/providers', authenticate, async (_req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const providers = llmConnector.getAllProviders();
     res.json({
       success: true,
       data: providers.map((p) => ({
-        id: p.name.toLowerCase().replace(/\s+.*$/, ''),
+        id: p.id,
         name: p.name,
         model: p.model,
+        models: p.models,
         contextWindow: p.maxTokens,
         costPer1kInput: p.costPer1kInput,
         costPer1kOutput: p.costPer1kOutput,
@@ -44,10 +45,6 @@ llmRouter.get('/providers', authenticate, async (_req: AuthRequest, res: Respons
   }
 });
 
-/**
- * POST /llm/test - actually pings the LLM provider using the user's key
- * (or the system fallback) and reports whether it succeeded.
- */
 llmRouter.post('/test', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { provider } = req.body;
@@ -56,23 +53,25 @@ llmRouter.post('/test', authenticate, async (req: AuthRequest, res: Response, ne
     const providerInfo = llmConnector.getProvider(provider);
     if (!providerInfo) throw new AppError('Unknown provider', 400);
 
-    const userKey = await prisma.apiKey.findFirst({
-      where: { userId: req.userId, provider, isActive: true },
-    });
+    // Resolve the user's key (decrypts just-in-time)
+    const resolved = await ApiKeyService.resolve(req.userId!, provider);
 
-    let result: { ok: boolean; error?: string; latency: number; usedUserKey: boolean; simulated: boolean; sample?: string };
+    let result: {
+      ok: boolean; error?: string; latency: number;
+      usedUserKey: boolean; simulated: boolean; sample?: string;
+    };
     const testStart = Date.now();
     try {
       const testResult = await llmConnector.send({
         prompt: 'Say "OK" in one word.',
         provider,
         maxTokens: 10,
-        apiKey: userKey?.key,
+        apiKey: resolved.key || undefined,
       });
       result = {
         ok: true,
         latency: Date.now() - testStart,
-        usedUserKey: testResult.usedUserKey,
+        usedUserKey: resolved.source === 'user',
         simulated: testResult.simulated,
         sample: testResult.text.slice(0, 100),
       };
@@ -80,7 +79,7 @@ llmRouter.post('/test', authenticate, async (req: AuthRequest, res: Response, ne
       result = {
         ok: false,
         latency: Date.now() - testStart,
-        usedUserKey: !!userKey,
+        usedUserKey: resolved.source === 'user',
         simulated: false,
         error: (err as Error).message,
       };
@@ -91,7 +90,7 @@ llmRouter.post('/test', authenticate, async (req: AuthRequest, res: Response, ne
       action: 'llm.tested',
       resource: 'llm_provider',
       resourceId: provider,
-      metadata: { ok: result.ok, usedUserKey: result.usedUserKey, latency: result.latency },
+      metadata: { ok: result.ok, keySource: resolved.source, latency: result.latency },
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
     });
@@ -104,6 +103,7 @@ llmRouter.post('/test', authenticate, async (req: AuthRequest, res: Response, ne
         reachable: result.ok,
         latencyMs: result.latency,
         usedUserKey: result.usedUserKey,
+        keySource: resolved.source,
         simulated: result.simulated,
         sampleResponse: result.sample,
         error: result.error,
@@ -114,14 +114,9 @@ llmRouter.post('/test', authenticate, async (req: AuthRequest, res: Response, ne
   }
 });
 
-/**
- * POST /llm/compress - compress a prompt and send it to a target LLM.
- * Returns both the compressed prompt and the LLM response.
- */
 llmRouter.post('/compress', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { text, level = 'medium', provider = 'openai' } = req.body;
-
+    const { text, level = 'medium', provider = 'openai', model } = req.body;
     if (!text) throw new AppError('Text is required', 400);
 
     const providerInfo = llmConnector.getProvider(provider);
@@ -129,7 +124,6 @@ llmRouter.post('/compress', authenticate, async (req: AuthRequest, res: Response
 
     logger.info(`[LLM] Compress-and-send: user=${req.userId} provider=${provider} level=${level}`);
 
-    // Run full multi-agent pipeline
     const pipelineResult = await supervisor.orchestrate({
       text,
       userId: req.userId!,
@@ -141,16 +135,13 @@ llmRouter.post('/compress', authenticate, async (req: AuthRequest, res: Response
       throw new AppError(`Pipeline failed: ${pipelineResult.error}`, 500);
     }
 
-    // Get user's API key for the provider
-    const userKey = await prisma.apiKey.findFirst({
-      where: { userId: req.userId, provider, isActive: true },
-    });
+    const resolved = await ApiKeyService.resolve(req.userId!, provider);
 
-    // Send compressed prompt to LLM
     const llmResponse = await llmConnector.send({
       prompt: pipelineResult.compressedText,
       provider,
-      apiKey: userKey?.key,
+      model,
+      apiKey: resolved.key || undefined,
     });
 
     res.json({
@@ -169,6 +160,7 @@ llmRouter.post('/compress', authenticate, async (req: AuthRequest, res: Response
           model: llmResponse.model,
           latencyMs: llmResponse.latencyMs,
           cost: llmResponse.cost,
+          keySource: resolved.source,
         },
         savings: {
           tokensSaved: (pipelineResult.analytics?.originalTokens ?? 0) - (pipelineResult.analytics?.compressedTokens ?? 0),
@@ -181,28 +173,23 @@ llmRouter.post('/compress', authenticate, async (req: AuthRequest, res: Response
   }
 });
 
-/**
- * POST /llm/chat - direct chat with an LLM provider (no compression).
- */
 llmRouter.post('/chat', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { prompt, provider = 'openai', temperature = 0.7, maxTokens } = req.body;
-
+    const { prompt, provider = 'openai', model, temperature = 0.7, maxTokens } = req.body;
     if (!prompt) throw new AppError('Prompt is required', 400);
 
     const providerInfo = llmConnector.getProvider(provider);
     if (!providerInfo) throw new AppError('Unknown provider', 400);
 
-    const userKey = await prisma.apiKey.findFirst({
-      where: { userId: req.userId, provider, isActive: true },
-    });
+    const resolved = await ApiKeyService.resolve(req.userId!, provider);
 
     const response = await llmConnector.send({
       prompt,
       provider,
+      model,
       temperature,
       maxTokens,
-      apiKey: userKey?.key,
+      apiKey: resolved.key || undefined,
     });
 
     const inputTokens = estimateTokens(prompt);
@@ -220,7 +207,8 @@ llmRouter.post('/chat', authenticate, async (req: AuthRequest, res: Response, ne
         outputCost: response.cost,
         totalCost: inputCost + response.cost,
         latencyMs: response.latencyMs,
-        usedUserKey: response.usedUserKey,
+        usedUserKey: resolved.source === 'user',
+        keySource: resolved.source,
         simulated: response.simulated,
       },
     });
