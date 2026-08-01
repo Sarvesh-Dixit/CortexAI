@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+@layer base {
+  /* ─────────────────────────────────────────────────────────────
+     Default (dark) theme — applied when no theme class is set
+     or when .dark is explicitly present on <html>
+     ───────────────────────────────────────────────────────────── */
+  :root,
+  .dark {
+    --background: 220 20% 6%;
+    --foreground: 220 10% 96%;
+    --card: 220 18% 10%;
+    --card-foreground: 220 10% 96%;
+    --popover: 220 18% 10%;
+    --popover-foreground: 220 10% 96%;
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 18% 16%;
+    --secondary-foreground: 220 10% 96%;
+    --muted: 220 18% 14%;
+    --muted-foreground: 220 10% 55%;
+    --accent: 262 83% 58%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 18% 18%;
+    --input: 220 18% 16%;
+    --ring: 262 83% 58%;
+    --success: 142 76% 36%;
+    --warning: 38 92% 50%;
+    --info: 199 89% 48%;
+
+    /* Theme-aware chart & overlay helpers */
+    --chart-grid: 220 18% 18%;
+    --tooltip-bg: 220 18% 10%;
+    --tooltip-border: 220 18% 22%;
+    --shadow-color: 0 0% 0%;
+    --shadow-alpha: 0.4;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     Light theme — applied via .light class on <html>
+     ───────────────────────────────────────────────────────────── */
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 222 32% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 32% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 32% 12%;
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 16% 96%;
+    --secondary-foreground: 222 32% 20%;
+    --muted: 220 16% 96%;
+    --muted-foreground: 220 8% 46%;
+    --accent: 262 83% 58%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 14% 90%;
+    --input: 220 16% 97%;
+    --ring: 262 83% 58%;
+    --success: 142 71% 40%;
+    --warning: 38 92% 50%;
+    --info: 199 89% 48%;
+
+    --chart-grid: 220 14% 90%;
+    --tooltip-bg: 0 0% 100%;
+    --tooltip-border: 220 14% 88%;
+    --shadow-color: 220 40% 20%;
+    --shadow-alpha: 0.08;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html {
+    color-scheme: dark;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  html.light {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', system-ui, sans-serif;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--card) / 0.85) 100%);
+    border: 1px solid hsl(var(--border));
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+  }
+
+  /* Light theme: soften the shadow and make cards more distinct */
+  .light .glass-card {
+    background: hsl(var(--card));
+    box-shadow: 0 1px 2px hsl(var(--shadow-color) / var(--shadow-alpha));
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, #06b6d4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-button {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, #7c3aed 50%, #06b6d4 100%);
+    background-size: 200% 200%;
+    transition: all 0.3s ease;
+  }
+
+  .gradient-button:hover {
+    background-position: 100% 100%;
+    box-shadow: 0 8px 25px hsl(var(--primary) / 0.3);
+  }
+
+  .sidebar-item {
+    transition: all 0.2s ease;
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+
+  .sidebar-item:hover {
+    background: hsl(var(--secondary));
+  }
+
+  .sidebar-item.active {
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.15) 0%, hsl(var(--primary) / 0.05) 100%);
+    border: 1px solid hsl(var(--primary) / 0.3);
+    color: hsl(var(--primary));
+  }
+
+  .stat-card {
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--secondary)) 100%);
+    border: 1px solid hsl(var(--border));
+    border-radius: 16px;
+    padding: 24px;
+    transition: all 0.3s ease;
+  }
+
+  .light .stat-card {
+    background: hsl(var(--card));
+    box-shadow: 0 1px 2px hsl(var(--shadow-color) / var(--shadow-alpha));
+  }
+
+  .stat-card:hover {
+    border-color: hsl(var(--primary) / 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px hsl(var(--primary) / 0.1);
+  }
+
+  .light .stat-card:hover {
+    box-shadow: 0 8px 24px hsl(var(--shadow-color) / 0.12);
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}

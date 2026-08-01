@@ -1,0 +1,100 @@
+# ══════════════════════════════════════════════════════════
+# Dependencies
+# ══════════════════════════════════════════════════════════
+node_modules/
+*/node_modules/
+.pnp/
+.pnp.js
+
+# ══════════════════════════════════════════════════════════
+# Environment / Secrets — NEVER commit real credentials
+# ══════════════════════════════════════════════════════════
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# ══════════════════════════════════════════════════════════
+# Build outputs
+# ══════════════════════════════════════════════════════════
+dist/
+build/
+out/
+.next/
+.nuxt/
+.svelte-kit/
+.turbo/
+.parcel-cache/
+
+# ══════════════════════════════════════════════════════════
+# Runtime data
+# ══════════════════════════════════════════════════════════
+server/uploads/
+server/logs/
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/prisma/migrations/dev/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# ══════════════════════════════════════════════════════════
+# Logs
+# ══════════════════════════════════════════════════════════
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ══════════════════════════════════════════════════════════
+# Testing / coverage
+# ══════════════════════════════════════════════════════════
+coverage/
+.nyc_output/
+*.lcov
+
+# ══════════════════════════════════════════════════════════
+# Editor / OS files
+# ══════════════════════════════════════════════════════════
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ══════════════════════════════════════════════════════════
+# Caches
+# ══════════════════════════════════════════════════════════
+.cache/
+.vite/
+.eslintcache
+.stylelintcache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# ══════════════════════════════════════════════════════════
+# TypeScript build info
+# ══════════════════════════════════════════════════════════
+*.tsbuildinfo
+
+# ══════════════════════════════════════════════════════════
+# Temp files
+# ══════════════════════════════════════════════════════════
+tmp/
+temp/
+*.tmp

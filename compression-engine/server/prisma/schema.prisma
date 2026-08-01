@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  name          String
+  avatar        String?
+  role          String   @default("developer")
+  theme         String   @default("dark")
+  language      String   @default("en")
+  preferredLlm  String   @default("openai")
+  defaultCompression String @default("medium")
+  isActive      Boolean  @default(true)
+  lastLogin     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  apiKeys       ApiKey[]
+  compressions  Compression[]
+  documents     Document[]
+  sessions      Session[]
+  activityLogs  ActivityLog[]
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique
+  refreshToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  userId    String
+  provider  String
+  key       String
+  label     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Compression {
+  id                 String   @id @default(uuid())
+  userId             String
+  documentId         String?
+  originalText       String
+  compressedText     String
+  originalTokens     Int
+  compressedTokens   Int
+  compressionRatio   Float
+  semanticScore      Float
+  compressionLevel   String
+  llmProvider        String?
+  documentType       String
+  language           String?
+  originalCost       Float
+  compressedCost     Float
+  costSavings        Float
+  latencyOriginal    Float?
+  latencyCompressed  Float?
+  latencyImprovement Float?
+  processingTime     Float?
+  status             String   @default("completed")
+  createdAt          DateTime @default(now())
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document Document?          @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  metrics  CompressionMetric?
+}
+
+model CompressionMetric {
+  id               String   @id @default(uuid())
+  compressionId    String   @unique
+  tokensSaved      Int
+  wordsSaved       Int
+  charactersSaved  Int
+  moneySaved       Float
+  latencyReduced   Float
+  semanticSimilarity Float
+  reasoningRetention Float
+  estimatedAccuracy Float
+  approved         Boolean  @default(true)
+  agentCount       Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  compression Compression @relation(fields: [compressionId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  userId      String
+  filename    String
+  originalName String
+  mimeType    String
+  size        Int
+  pages       Int?
+  words       Int?
+  characters  Int?
+  tokens      Int?
+  content     String?
+  documentType String
+  language    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  compressions Compression[]
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  userId     String
+  action     String
+  resource   String?
+  resourceId String?
+  metadata   String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([action])
+}
+
+model LLMProviderConfig {
+  id              String   @id @default(uuid())
+  providerId      String   @unique
+  displayName     String
+  modelName       String
+  contextWindow   Int
+  costPer1kInput  Float
+  costPer1kOutput Float
+  speedRating     String
+  isEnabled       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
