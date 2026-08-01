@@ -13,8 +13,10 @@
 import { logger } from '../utils/logger';
 
 export interface LLMProvider {
+  id: string;
   name: string;
-  model: string;
+  model: string;               // default model
+  models: string[];            // available model IDs
   maxTokens: number;
   costPer1kInput: number;
   costPer1kOutput: number;
@@ -26,72 +28,100 @@ export interface LLMRequest {
   maxTokens?: number;
   temperature?: number;
   provider: string;
+  model?: string;              // optional model override
   apiKey?: string;
 }
 
 export interface LLMResponse {
   text: string;
-  tokens: number;
+  tokens: number;              // completion (output) tokens
+  inputTokens: number;         // prompt (input) tokens
   provider: string;
   model: string;
   latencyMs: number;
-  cost: number;
+  cost: number;                // total (input + output) cost
   usedUserKey: boolean;
   simulated: boolean;
 }
 
 const PROVIDERS: Record<string, LLMProvider> = {
   openai: {
+    id: 'openai',
     name: 'OpenAI',
     model: 'gpt-4o-mini',
+    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
     maxTokens: 128000,
     costPer1kInput: 0.00015,
     costPer1kOutput: 0.0006,
     estimatedLatencyPerToken: 0.05,
   },
   gemini: {
+    id: 'gemini',
     name: 'Google Gemini',
     model: 'gemini-1.5-flash',
+    models: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.0-flash-exp'],
     maxTokens: 1000000,
     costPer1kInput: 0.0025,
     costPer1kOutput: 0.005,
     estimatedLatencyPerToken: 0.04,
   },
   claude: {
+    id: 'claude',
     name: 'Anthropic Claude',
-    model: 'claude-3-haiku-20240307',
+    model: 'claude-3-5-haiku-20241022',
+    models: [
+      'claude-3-5-sonnet-20241022',
+      'claude-3-5-haiku-20241022',
+      'claude-3-opus-20240229',
+      'claude-3-sonnet-20240229',
+      'claude-3-haiku-20240307',
+    ],
     maxTokens: 200000,
     costPer1kInput: 0.00025,
     costPer1kOutput: 0.00125,
     estimatedLatencyPerToken: 0.06,
   },
   llama: {
+    id: 'llama',
     name: 'Meta Llama',
-    model: 'llama-3',
+    model: 'llama-3.3-70b-instruct',
+    models: [
+      'llama-3.3-70b-instruct',
+      'llama-3.2-90b-instruct',
+      'llama-3.2-11b-instruct',
+      'llama-3.1-70b-instruct',
+      'llama-3.1-8b-instruct',
+    ],
     maxTokens: 128000,
     costPer1kInput: 0.001,
     costPer1kOutput: 0.002,
     estimatedLatencyPerToken: 0.08,
   },
   deepseek: {
+    id: 'deepseek',
     name: 'DeepSeek',
     model: 'deepseek-chat',
+    models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
     maxTokens: 128000,
     costPer1kInput: 0.00014,
     costPer1kOutput: 0.00028,
     estimatedLatencyPerToken: 0.07,
   },
   mistral: {
+    id: 'mistral',
     name: 'Mistral AI',
     model: 'mistral-small-latest',
+    models: ['mistral-large-latest', 'mistral-small-latest', 'ministral-8b-latest', 'codestral-latest'],
     maxTokens: 32000,
     costPer1kInput: 0.001,
     costPer1kOutput: 0.003,
     estimatedLatencyPerToken: 0.05,
   },
   ollama: {
+    id: 'ollama',
     name: 'Ollama (Local)',
     model: 'llama3',
+    models: ['llama3', 'llama3.2', 'mistral', 'phi3', 'gemma2', 'qwen2.5', 'deepseek-coder'],
     maxTokens: 8192,
     costPer1kInput: 0,
     costPer1kOutput: 0,
@@ -122,6 +152,10 @@ export class LLMConnectorService {
     return Object.keys(PROVIDERS);
   }
 
+  getModels(providerId: string): string[] {
+    return PROVIDERS[providerId]?.models || [];
+  }
+
   estimateCost(tokens: number, provider: string, direction: 'input' | 'output' = 'input'): number {
     const p = PROVIDERS[provider];
     if (!p) return 0;
@@ -140,16 +174,12 @@ export class LLMConnectorService {
     return p ? p.maxTokens : 8192;
   }
 
-  /**
-   * Resolve which API key to use.
-   * Returns { key, isUserKey } or null if no key available.
-   */
   private resolveKey(providerId: string, userKey?: string): { key: string; isUserKey: boolean } | null {
     if (userKey && userKey.trim().length > 0) {
       return { key: userKey.trim(), isUserKey: true };
     }
     if (providerId === 'ollama') {
-      return { key: '', isUserKey: false }; // Ollama runs locally, no key needed
+      return { key: '', isUserKey: false };
     }
     const envName = SYSTEM_KEY_ENV[providerId];
     const systemKey = envName ? process.env[envName] : undefined;
@@ -159,51 +189,43 @@ export class LLMConnectorService {
     return null;
   }
 
-  /**
-   * Send a request to an LLM provider.
-   * Real HTTP calls for openai, gemini, claude, ollama.
-   * Others fall back to a simulated response so the pipeline stays testable.
-   */
   async send(request: LLMRequest): Promise<LLMResponse> {
     const provider = PROVIDERS[request.provider];
     if (!provider) {
       throw new Error(`Unknown LLM provider: ${request.provider}`);
     }
 
+    const model = request.model || provider.model;
     const resolved = this.resolveKey(request.provider, request.apiKey);
 
-    logger.info(`[LLM] ${provider.name} (${provider.model}) key=${resolved ? (resolved.isUserKey ? 'user' : 'system') : 'none'}`);
+    logger.info(`[LLM] ${provider.name} (${model}) key=${resolved ? (resolved.isUserKey ? 'user' : 'system') : 'none'}`);
 
-    // Real integrations
     try {
       if (request.provider === 'openai' && resolved) {
-        return await this.callOpenAI(request, resolved.key, resolved.isUserKey);
+        return await this.callOpenAI(request, model, resolved.key, resolved.isUserKey);
       }
       if (request.provider === 'gemini' && resolved) {
-        return await this.callGemini(request, resolved.key, resolved.isUserKey);
+        return await this.callGemini(request, model, resolved.key, resolved.isUserKey);
       }
       if (request.provider === 'claude' && resolved) {
-        return await this.callClaude(request, resolved.key, resolved.isUserKey);
+        return await this.callClaude(request, model, resolved.key, resolved.isUserKey);
       }
       if (request.provider === 'ollama') {
-        return await this.callOllama(request);
+        return await this.callOllama(request, model);
       }
     } catch (error) {
       logger.error(`[LLM] Real call failed for ${request.provider}: ${(error as Error).message}`);
       throw new Error(
-        `${provider.name} API call failed: ${(error as Error).message}. ` +
+        `${provider.name} (${model}) call failed: ${(error as Error).message}. ` +
         `Verify your API key in Settings.`
       );
     }
 
-    // Simulated response for providers without integration yet
-    return this.simulated(request, provider, resolved);
+    return this.simulated(request, provider, model, resolved);
   }
 
-  private async callOpenAI(request: LLMRequest, apiKey: string, isUserKey: boolean): Promise<LLMResponse> {
-    const provider = PROVIDERS.openai;
+  private async callOpenAI(request: LLMRequest, model: string, apiKey: string, isUserKey: boolean): Promise<LLMResponse> {
     const start = Date.now();
-
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -211,7 +233,7 @@ export class LLMConnectorService {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: provider.model,
+        model,
         messages: [{ role: 'user', content: request.prompt }],
         temperature: request.temperature ?? 0.7,
         max_tokens: request.maxTokens ?? 1024,
@@ -226,27 +248,26 @@ export class LLMConnectorService {
     const data = await res.json() as any;
     const text = data.choices?.[0]?.message?.content ?? '';
     const usage = data.usage || {};
-    const promptTokens = usage.prompt_tokens || Math.ceil(request.prompt.length / 4);
-    const completionTokens = usage.completion_tokens || Math.ceil(text.length / 4);
+    const inputTokens = usage.prompt_tokens || Math.ceil(request.prompt.length / 4);
+    const outputTokens = usage.completion_tokens || Math.ceil(text.length / 4);
 
     return {
       text,
-      tokens: completionTokens,
+      tokens: outputTokens,
+      inputTokens,
       provider: 'openai',
-      model: data.model || provider.model,
+      model: data.model || model,
       latencyMs: Date.now() - start,
-      cost: this.estimateCost(promptTokens, 'openai', 'input') +
-            this.estimateCost(completionTokens, 'openai', 'output'),
+      cost: this.estimateCost(inputTokens, 'openai', 'input') +
+            this.estimateCost(outputTokens, 'openai', 'output'),
       usedUserKey: isUserKey,
       simulated: false,
     };
   }
 
-  private async callGemini(request: LLMRequest, apiKey: string, isUserKey: boolean): Promise<LLMResponse> {
-    const provider = PROVIDERS.gemini;
+  private async callGemini(request: LLMRequest, model: string, apiKey: string, isUserKey: boolean): Promise<LLMResponse> {
     const start = Date.now();
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${provider.model}:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -267,26 +288,25 @@ export class LLMConnectorService {
     const data = await res.json() as any;
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     const usage = data.usageMetadata || {};
-    const promptTokens = usage.promptTokenCount || Math.ceil(request.prompt.length / 4);
-    const completionTokens = usage.candidatesTokenCount || Math.ceil(text.length / 4);
+    const inputTokens = usage.promptTokenCount || Math.ceil(request.prompt.length / 4);
+    const outputTokens = usage.candidatesTokenCount || Math.ceil(text.length / 4);
 
     return {
       text,
-      tokens: completionTokens,
+      tokens: outputTokens,
+      inputTokens,
       provider: 'gemini',
-      model: provider.model,
+      model,
       latencyMs: Date.now() - start,
-      cost: this.estimateCost(promptTokens, 'gemini', 'input') +
-            this.estimateCost(completionTokens, 'gemini', 'output'),
+      cost: this.estimateCost(inputTokens, 'gemini', 'input') +
+            this.estimateCost(outputTokens, 'gemini', 'output'),
       usedUserKey: isUserKey,
       simulated: false,
     };
   }
 
-  private async callClaude(request: LLMRequest, apiKey: string, isUserKey: boolean): Promise<LLMResponse> {
-    const provider = PROVIDERS.claude;
+  private async callClaude(request: LLMRequest, model: string, apiKey: string, isUserKey: boolean): Promise<LLMResponse> {
     const start = Date.now();
-
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -295,7 +315,7 @@ export class LLMConnectorService {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: provider.model,
+        model,
         max_tokens: request.maxTokens ?? 1024,
         temperature: request.temperature ?? 0.7,
         messages: [{ role: 'user', content: request.prompt }],
@@ -310,24 +330,24 @@ export class LLMConnectorService {
     const data = await res.json() as any;
     const text = data.content?.[0]?.text ?? '';
     const usage = data.usage || {};
-    const promptTokens = usage.input_tokens || Math.ceil(request.prompt.length / 4);
-    const completionTokens = usage.output_tokens || Math.ceil(text.length / 4);
+    const inputTokens = usage.input_tokens || Math.ceil(request.prompt.length / 4);
+    const outputTokens = usage.output_tokens || Math.ceil(text.length / 4);
 
     return {
       text,
-      tokens: completionTokens,
+      tokens: outputTokens,
+      inputTokens,
       provider: 'claude',
-      model: provider.model,
+      model,
       latencyMs: Date.now() - start,
-      cost: this.estimateCost(promptTokens, 'claude', 'input') +
-            this.estimateCost(completionTokens, 'claude', 'output'),
+      cost: this.estimateCost(inputTokens, 'claude', 'input') +
+            this.estimateCost(outputTokens, 'claude', 'output'),
       usedUserKey: isUserKey,
       simulated: false,
     };
   }
 
-  private async callOllama(request: LLMRequest): Promise<LLMResponse> {
-    const provider = PROVIDERS.ollama;
+  private async callOllama(request: LLMRequest, model: string): Promise<LLMResponse> {
     const start = Date.now();
     const host = process.env.OLLAMA_HOST || 'http://localhost:11434';
 
@@ -335,7 +355,7 @@ export class LLMConnectorService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: provider.model,
+        model,
         prompt: request.prompt,
         stream: false,
         options: { temperature: request.temperature ?? 0.7 },
@@ -349,14 +369,15 @@ export class LLMConnectorService {
 
     const data = await res.json() as any;
     const text = data.response ?? '';
-    const promptTokens = data.prompt_eval_count || Math.ceil(request.prompt.length / 4);
-    const completionTokens = data.eval_count || Math.ceil(text.length / 4);
+    const inputTokens = data.prompt_eval_count || Math.ceil(request.prompt.length / 4);
+    const outputTokens = data.eval_count || Math.ceil(text.length / 4);
 
     return {
       text,
-      tokens: completionTokens,
+      tokens: outputTokens,
+      inputTokens,
       provider: 'ollama',
-      model: provider.model,
+      model,
       latencyMs: Date.now() - start,
       cost: 0,
       usedUserKey: false,
@@ -367,24 +388,27 @@ export class LLMConnectorService {
   private simulated(
     request: LLMRequest,
     provider: LLMProvider,
+    model: string,
     resolved: { key: string; isUserKey: boolean } | null
   ): LLMResponse {
     logger.warn(`[LLM] Using simulated response for ${request.provider} (no real integration yet)`);
-    const tokens = Math.ceil(request.prompt.length / 4);
-    const latency = this.estimateLatency(tokens, request.provider);
+    const inputTokens = Math.ceil(request.prompt.length / 4);
+    const latency = this.estimateLatency(inputTokens, request.provider);
 
-    const notice = `[Simulated response — ${provider.name} integration not yet wired]\n\n` +
-      `The prompt was received (${tokens} tokens). To get real responses, ` +
+    const notice = `[Simulated response — ${provider.name} (${model}) integration not yet wired]\n\n` +
+      `The prompt was received (${inputTokens} tokens). To get real responses, ` +
       `either configure ${SYSTEM_KEY_ENV[request.provider] || 'a system key'} in .env, ` +
       `or add your API key in Settings.`;
+    const outputTokens = Math.ceil(notice.length / 4);
 
     return {
       text: notice,
-      tokens,
+      tokens: outputTokens,
+      inputTokens,
       provider: request.provider,
-      model: provider.model,
+      model,
       latencyMs: latency,
-      cost: this.estimateCost(tokens, request.provider, 'input'),
+      cost: this.estimateCost(inputTokens, request.provider, 'input'),
       usedUserKey: resolved?.isUserKey ?? false,
       simulated: true,
     };

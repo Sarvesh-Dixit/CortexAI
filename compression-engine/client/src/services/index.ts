@@ -4,5 +4,13 @@ export { DocumentService } from './document.service';
 export { AnalyticsService } from './analytics.service';
 export { SettingsService } from './settings.service';
 export { PlaygroundService } from './playground.service';
+export type {
+  BenchmarkPayload,
+  BenchmarkResult,
+  BenchmarkTelemetry,
+  ProviderModelCatalog,
+  ComparisonResult,
+  TokenCountResult,
+} from './playground.service';
 export { OcrService } from './ocr.service';
 export type { OcrExtractResult, OcrCompressResult, OcrLanguageOption } from './ocr.service';
