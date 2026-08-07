@@ -1,0 +1,19 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "src/app.ts": {
+      "runtime": "@vercel/node@3",
+      "maxDuration": 300,
+      "includeFiles": [
+        "eng.traineddata",
+        "node_modules/tesseract.js-core/*.wasm",
+        "node_modules/tesseract.js-core/*.wasm.js"
+      ]
+    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/src/app.ts" }
+  ],
+  "installCommand": "npm install"
+}

@@ -20,6 +20,7 @@ const SUPPORTED_MIME = {
   'image/webp': ['.webp'],
   'image/gif': ['.gif'],
   'image/bmp': ['.bmp'],
+  'image/tiff': ['.tif', '.tiff'],
 };
 
 export default function OcrPage() {
@@ -63,7 +64,6 @@ export default function OcrPage() {
     onDrop,
     accept: SUPPORTED_MIME,
     maxFiles: 1,
-    maxSize: 20 * 1024 * 1024,
   });
 
   const handleExtract = async () => {
@@ -75,7 +75,11 @@ export default function OcrPage() {
       setExtractResult(result);
       toast.success(`Extracted ${result.words} words with ${Math.round(result.confidence)}% confidence`);
     } catch (error: any) {
-      toast.error(error.response?.data?.error?.message || 'OCR failed');
+      const msg =
+        error?.message ||
+        error?.response?.data?.error?.message ||
+        'OCR failed';
+      toast.error(msg);
     } finally {
       setExtracting(false);
     }
@@ -92,7 +96,11 @@ export default function OcrPage() {
         `Extracted + compressed by ${Math.round(result.compression.compressionRatio * 100)}%`
       );
     } catch (error: any) {
-      toast.error(error.response?.data?.error?.message || 'Extract & compress failed');
+      const msg =
+        error?.message ||
+        error?.response?.data?.error?.message ||
+        'Extract & compress failed';
+      toast.error(msg);
     } finally {
       setCompressing(false);
     }
@@ -175,7 +183,7 @@ export default function OcrPage() {
               />
               <p className="text-sm font-medium">Drop a screenshot or image here</p>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                PNG, JPG, WebP, GIF, BMP • Max 20MB
+                PNG, JPG, WebP, GIF, BMP, TIFF • Any size supported
               </p>
               <div className="flex items-center justify-center gap-3 mt-4 text-[10px] text-[hsl(var(--muted-foreground))]">
                 <span className="flex items-center gap-1">
