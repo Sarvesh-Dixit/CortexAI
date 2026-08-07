@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth.store';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
-import { Zap, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Zap, Mail, Lock, User, Eye, EyeOff, Check, X as XIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function RegisterPage() {
@@ -16,6 +16,18 @@ export default function RegisterPage() {
   const { login } = useAuthStore();
   const navigate = useNavigate();
 
+  const passwordChecks = useMemo(() => [
+    { label: 'At least 8 characters', met: password.length >= 8 },
+    { label: 'One uppercase letter', met: /[A-Z]/.test(password) },
+    { label: 'One lowercase letter', met: /[a-z]/.test(password) },
+    { label: 'One number', met: /\d/.test(password) },
+    { label: 'One special character (!@#$%^&*)', met: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password) },
+  ], [password]);
+
+  const allChecksPassed = passwordChecks.every((c) => c.met);
+  const strengthPct = (passwordChecks.filter((c) => c.met).length / passwordChecks.length) * 100;
+  const strengthColor = strengthPct <= 40 ? 'bg-red-500' : strengthPct <= 70 ? 'bg-amber-500' : 'bg-emerald-500';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -24,8 +36,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password.length < 8) {
-      toast.error('Password must be at least 8 characters');
+    if (!allChecksPassed) {
+      toast.error('Password does not meet all requirements');
       return;
     }
 
@@ -115,6 +127,33 @@ export default function RegisterPage() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              {/* Password requirements */}
+              {password.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full bg-[hsl(var(--secondary))] overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-300 ${strengthColor}`} style={{ width: `${strengthPct}%` }} />
+                    </div>
+                    <span className="text-[10px] text-[hsl(var(--muted-foreground))] w-12 text-right">
+                      {strengthPct <= 40 ? 'Weak' : strengthPct <= 70 ? 'Medium' : 'Strong'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-0.5">
+                    {passwordChecks.map((check) => (
+                      <div key={check.label} className="flex items-center gap-1.5 text-[11px]">
+                        {check.met ? (
+                          <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                        ) : (
+                          <XIcon className="w-3 h-3 text-[hsl(var(--muted-foreground))] flex-shrink-0" />
+                        )}
+                        <span className={check.met ? 'text-emerald-400' : 'text-[hsl(var(--muted-foreground))]'}>
+                          {check.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
