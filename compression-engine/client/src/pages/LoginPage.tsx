@@ -32,7 +32,7 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = () => {
-    toast('Google login coming soon', { icon: '🚧' });
+    toast('Google login coming soon', { icon: 'ðŸš§' });
   };
 
   return (
@@ -47,7 +47,7 @@ export default function LoginPage() {
           <div className="w-12 h-12 rounded-xl gradient-button flex items-center justify-center">
             <Zap className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold gradient-text">CompressionAI</h1>
+          <h1 className="text-2xl font-bold gradient-text">CortexAI</h1>
         </div>
 
         <div className="glass-card p-8">
@@ -72,7 +72,7 @@ export default function LoginPage() {
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
               required
               leftIcon={<Lock className="w-4 h-4" />}
               rightIcon={

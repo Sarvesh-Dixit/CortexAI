@@ -104,7 +104,7 @@ export default function HelpPage() {
     <div className="space-y-8 max-w-4xl">
       <PageHeader
         title="Help Center"
-        description="Find answers, guides, and support for CompressionAI"
+        description="Find answers, guides, and support for CortexAI"
       />
 
       {/* Categories */}
@@ -151,7 +151,7 @@ export default function HelpPage() {
               Can't find the answer you're looking for? Our team is here to help.
             </p>
             <a
-              href="mailto:support@compressionai.dev"
+              href="mailto:support@CortexAI.dev"
               className="inline-flex items-center gap-2 text-sm text-[hsl(var(--primary))] hover:underline font-medium"
             >
               Contact Support

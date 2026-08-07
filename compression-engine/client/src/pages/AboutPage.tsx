@@ -53,7 +53,7 @@ export default function AboutPage() {
         <div className="w-16 h-16 rounded-2xl gradient-button flex items-center justify-center mx-auto mb-4">
           <Zap className="w-9 h-9 text-white" />
         </div>
-        <h1 className="text-3xl font-bold gradient-text mb-3">CompressionAI</h1>
+        <h1 className="text-3xl font-bold gradient-text mb-3">CortexAI</h1>
         <p className="text-[hsl(var(--muted-foreground))] max-w-xl mx-auto">
           Ultra-Low Resource LLM Context Compression Engine. An intelligent middleware platform that
           reduces token usage by 70%+ while preserving 95%+ reasoning accuracy.
@@ -127,7 +127,7 @@ export default function AboutPage() {
               <h4 className="text-xs font-semibold text-[hsl(var(--primary))] uppercase tracking-wider mb-2">{group.category}</h4>
               <ul className="space-y-1">
                 {group.items.map((item) => (
-                  <li key={item} className="text-xs text-[hsl(var(--muted-foreground))]">• {item}</li>
+                  <li key={item} className="text-xs text-[hsl(var(--muted-foreground))]">â€¢ {item}</li>
                 ))}
               </ul>
             </div>
@@ -164,7 +164,7 @@ export default function AboutPage() {
 
       {/* Version */}
       <div className="text-center text-xs text-[hsl(var(--muted-foreground))] py-4">
-        <p>CompressionAI v1.0.0 • Built with modern AI architecture</p>
+        <p>CortexAI v1.0.0 â€¢ Built with modern AI architecture</p>
       </div>
     </div>
   );

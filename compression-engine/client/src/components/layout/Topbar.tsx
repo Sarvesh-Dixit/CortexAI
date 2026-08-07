@@ -59,7 +59,7 @@ export function Topbar({ onMobileMenuToggle }: TopbarProps) {
             <Search className="w-3.5 h-3.5" />
             <span className="flex-1 text-left">Search history, documents, prompts...</span>
             <kbd className="px-1.5 py-0.5 text-[10px] font-mono border border-[hsl(var(--border))] rounded bg-[hsl(var(--secondary))]">
-              ⌘K
+              âŒ˜K
             </kbd>
           </button>
         </div>

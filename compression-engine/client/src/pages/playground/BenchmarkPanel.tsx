@@ -19,7 +19,7 @@ const SAMPLE_PROMPTS: Record<string, { title: string; text: string }> = {
   },
   documentation: {
     title: 'Technical Documentation',
-    text: `The CompressionAI platform provides a REST API for prompt compression. To use the API, developers must first authenticate using JWT tokens. Once authenticated, they can send POST requests to the /api/compression/compress endpoint. The request body should contain a "text" field with the prompt to compress, an optional "level" field (low, medium, high, or extreme), and an optional "llmProvider" field. The response includes the compressed text, token counts, compression ratio, semantic score, and cost savings. Rate limiting is applied at 100 requests per 15 minutes per user. For higher limits, contact support.`,
+    text: `The CortexAI platform provides a REST API for prompt compression. To use the API, developers must first authenticate using JWT tokens. Once authenticated, they can send POST requests to the /api/compression/compress endpoint. The request body should contain a "text" field with the prompt to compress, an optional "level" field (low, medium, high, or extreme), and an optional "llmProvider" field. The response includes the compressed text, token counts, compression ratio, semantic score, and cost savings. Rate limiting is applied at 100 requests per 15 minutes per user. For higher limits, contact support.`,
   },
   reasoning: {
     title: 'Complex Reasoning',
@@ -165,7 +165,7 @@ export default function BenchmarkPanel() {
             options={
               currentProvider
                 ? currentProvider.models.map((m: string) => ({ value: m, label: m }))
-                : [{ value: '', label: 'Loading…' }]
+                : [{ value: '', label: 'Loadingâ€¦' }]
             }
           />
           <Select
@@ -232,7 +232,7 @@ export default function BenchmarkPanel() {
             </div>
             <div className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
               {tokenSavings > 0 && (
-                <span className="text-emerald-400">−{formatNumber(tokenSavings)}</span>
+                <span className="text-emerald-400">âˆ’{formatNumber(tokenSavings)}</span>
               )}
               <span>~{formatNumber(compressedTokens)} tokens</span>
             </div>
@@ -252,7 +252,7 @@ export default function BenchmarkPanel() {
               onClick={handleAutoCompress}
               leftIcon={!autoCompressing ? <Sparkles className="w-3.5 h-3.5" /> : undefined}
             >
-              {autoCompressing ? 'Compressing…' : 'Auto-compress from Original'}
+              {autoCompressing ? 'Compressingâ€¦' : 'Auto-compress from Original'}
             </Button>
           </div>
         </Card>
@@ -269,7 +269,7 @@ export default function BenchmarkPanel() {
           leftIcon={!running ? <Play className="w-4 h-4" /> : undefined}
           className="min-w-[240px]"
         >
-          {running ? 'Running benchmark…' : 'Run Parallel Benchmark'}
+          {running ? 'Running benchmarkâ€¦' : 'Run Parallel Benchmark'}
         </Button>
       </div>
 
@@ -304,7 +304,7 @@ export default function BenchmarkPanel() {
                 icon={Clock}
                 iconColor="text-amber-400"
                 label="Latency"
-                primary={`${result.original.latencyMs}→${result.compressed.latencyMs}ms`}
+                primary={`${result.original.latencyMs}â†’${result.compressed.latencyMs}ms`}
                 secondary={
                   result.telemetry.latencyImprovementPct > 0
                     ? `${result.telemetry.latencyImprovementPct.toFixed(0)}% faster`
@@ -317,7 +317,7 @@ export default function BenchmarkPanel() {
                 iconColor="text-emerald-400"
                 label="Cost Saved / Call"
                 primary={`$${result.telemetry.costSaved.toFixed(6)}`}
-                secondary={`${result.telemetry.costSavedMicroUsd} µUSD`}
+                secondary={`${result.telemetry.costSavedMicroUsd} ÂµUSD`}
               />
             </div>
 
@@ -358,7 +358,7 @@ export default function BenchmarkPanel() {
                           {result.original.response || '(empty)'}
                         </pre>
                         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2">
-                          {result.original.latencyMs}ms • ${result.original.cost.toFixed(6)}
+                          {result.original.latencyMs}ms â€¢ ${result.original.cost.toFixed(6)}
                         </p>
                       </Card>
 
@@ -380,7 +380,7 @@ export default function BenchmarkPanel() {
                           {result.compressed.response || '(empty)'}
                         </pre>
                         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2">
-                          {result.compressed.latencyMs}ms • ${result.compressed.cost.toFixed(6)}
+                          {result.compressed.latencyMs}ms â€¢ ${result.compressed.cost.toFixed(6)}
                         </p>
                       </Card>
                     </div>

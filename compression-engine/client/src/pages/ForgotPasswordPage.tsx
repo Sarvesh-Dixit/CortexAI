@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
           <div className="w-12 h-12 rounded-xl gradient-button flex items-center justify-center">
             <Zap className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold gradient-text">CompressionAI</h1>
+          <h1 className="text-2xl font-bold gradient-text">CortexAI</h1>
         </div>
 
         <div className="glass-card p-8">
