@@ -29,6 +29,10 @@ api.interceptors.request.use((config) => {
   } else if (config.timeout > MAX_TIMEOUT_MS) {
     config.timeout = MAX_TIMEOUT_MS;
   }
+  // Let axios auto-detect Content-Type for FormData (multipart/form-data)
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
   return config;
 });
 
