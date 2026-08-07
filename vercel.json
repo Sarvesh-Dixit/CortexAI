@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "cd compression-engine/client && npm install --include=dev && npm run build",
+  "outputDirectory": "compression-engine/client/dist",
+  "installCommand": "cd compression-engine/client && npm install --include=dev",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
