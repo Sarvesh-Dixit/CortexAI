@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { prisma } from '../utils/prisma';
-import { AppError } from '../middleware/errorHandler';
+import { AppError, requireEnv } from '../middleware/errorHandler';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { ActivityLogService } from '../services/activity-log.service';
 import { isRoleValid } from '../middleware/rbac';
@@ -25,10 +25,10 @@ const loginSchema = z.object({
 });
 
 function generateTokens(userId: string) {
-  const accessToken = jwt.sign({ userId }, process.env.JWT_SECRET!, { expiresIn: '24h' });
+  const accessToken = jwt.sign({ userId }, requireEnv('JWT_SECRET'), { expiresIn: '24h' });
   const refreshToken = jwt.sign(
     { userId, type: 'refresh' },
-    process.env.JWT_REFRESH_SECRET!,
+    requireEnv('JWT_REFRESH_SECRET'),
     { expiresIn: '7d' }
   );
   return { accessToken, refreshToken };
@@ -179,7 +179,7 @@ authRouter.post('/refresh', async (req: Request, res: Response, next: NextFuncti
     const { refreshToken } = req.body;
     if (!refreshToken) throw new AppError('Refresh token required', 400);
 
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET!) as { userId: string };
+    const decoded = jwt.verify(refreshToken, requireEnv('JWT_REFRESH_SECRET')) as { userId: string };
     const session = await prisma.session.findFirst({
       where: {
         refreshHash: sha256(refreshToken),
@@ -349,7 +349,7 @@ authRouter.post('/forgot-password', async (req: Request, res: Response, next: Ne
       return res.json({ success: true, message: 'If the email exists, a reset link has been sent' });
     }
 
-    const resetToken = jwt.sign({ userId: user.id, type: 'reset' }, process.env.JWT_SECRET!, { expiresIn: '1h' });
+    const resetToken = jwt.sign({ userId: user.id, type: 'reset' }, requireEnv('JWT_SECRET'), { expiresIn: '1h' });
 
     // Store only the HASH — the raw token goes to the user via email
     await prisma.passwordReset.create({
@@ -379,7 +379,7 @@ authRouter.post('/reset-password', async (req: Request, res: Response, next: Nex
     if (!token || !newPassword) throw new AppError('Token and new password required', 400);
     if (newPassword.length < 8) throw new AppError('Password must be at least 8 characters', 400);
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string; type: string };
+    const decoded = jwt.verify(token, requireEnv('JWT_SECRET')) as { userId: string; type: string };
     if (decoded.type !== 'reset') throw new AppError('Invalid reset token', 400);
 
     // Verify the token was issued by us (present in password_resets and unused)

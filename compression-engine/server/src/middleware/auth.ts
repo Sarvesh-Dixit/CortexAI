@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../utils/prisma';
-import { AppError } from './errorHandler';
+import { AppError, requireEnv } from './errorHandler';
 import { sha256 } from '../utils/crypto';
 
 export interface AuthRequest extends Request {
@@ -26,7 +26,7 @@ export async function authenticate(
     if (!token) throw new AppError('Authentication required', 401);
 
     // 1) Verify the JWT signature and expiry
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+    const decoded = jwt.verify(token, requireEnv('JWT_SECRET')) as { userId: string };
 
     // 2) Confirm the session still exists and is not revoked
     //    (allows admin-triggered mass logout by revoking all sessions)

@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
-import { AppError } from '../middleware/errorHandler';
+import { AppError, requireEnv } from '../middleware/errorHandler';
 import {
   estimateTokens,
   detectDocumentType,
@@ -18,7 +18,8 @@ import { logger } from '../utils/logger';
 
 export const documentRouter = Router();
 
-const uploadsDir = path.join(process.cwd(), 'uploads');
+const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const uploadsDir = isVercel ? '/tmp/uploads' : path.join(process.cwd(), 'uploads');
 
 (async () => {
   try {
@@ -357,7 +358,7 @@ documentRouter.get('/:id/download', async (req: AuthRequest, res: Response, next
     const jwt = await import('jsonwebtoken');
     let userId: string;
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+      const decoded = jwt.verify(token, requireEnv('JWT_SECRET')) as { userId: string };
       userId = decoded.userId;
     } catch {
       throw new AppError('Invalid token', 401);
@@ -405,7 +406,7 @@ documentRouter.get('/:id/raw', async (req: AuthRequest, res: Response, next: Nex
     const jwt = await import('jsonwebtoken');
     let userId: string;
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+      const decoded = jwt.verify(token, requireEnv('JWT_SECRET')) as { userId: string };
       userId = decoded.userId;
     } catch {
       throw new AppError('Invalid token', 401);

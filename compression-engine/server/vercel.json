@@ -6,13 +6,7 @@
     "src/app.ts": {
       "runtime": "@vercel/node@3",
       "maxDuration": 300,
-      "includeFiles": [
-        "eng.traineddata",
-        "node_modules/tesseract.js-core/*.wasm",
-        "node_modules/tesseract.js-core/*.wasm.js",
-        "node_modules/.prisma/**",
-        "node_modules/@prisma/client/**"
-      ]
+      "includeFiles": "{eng.traineddata,node_modules/tesseract.js-core/*.wasm,node_modules/tesseract.js-core/*.wasm.js,node_modules/.prisma/**,node_modules/@prisma/client/**}"
     }
   },
   "rewrites": [

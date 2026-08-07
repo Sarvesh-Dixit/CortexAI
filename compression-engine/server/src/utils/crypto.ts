@@ -26,10 +26,10 @@ function getKey(): Buffer {
 
   const hex = process.env.ENCRYPTION_KEY;
   if (!hex) {
-    throw new Error(
-      'ENCRYPTION_KEY environment variable is not set. ' +
-      'Generate one with:  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
-    );
+    const hint = Boolean(process.env.VERCEL || process.env.VERCEL_ENV)
+      ? ' Add it in Vercel Project Settings → Environment Variables.'
+      : ' Generate one with:  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"';
+    throw new Error('ENCRYPTION_KEY environment variable is not set.' + hint);
   }
 
   const key = Buffer.from(hex, 'hex');

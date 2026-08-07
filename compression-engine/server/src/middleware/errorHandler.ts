@@ -25,6 +25,18 @@ export class AppError extends Error {
   }
 }
 
+export function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (value && value.trim().length > 0) return value;
+  throw new AppError(
+    `Missing required environment variable: ${name}. ` +
+    `If deploying on Vercel, add it in Project Settings → Environment Variables. ` +
+    `See .env.example for details.`,
+    500,
+    'missing_env'
+  );
+}
+
 export function errorHandler(
   err: Error | AppError,
   req: Request,
