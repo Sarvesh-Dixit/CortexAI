@@ -17,6 +17,8 @@ import { settingsRouter } from './routes/settings.routes';
 import { playgroundRouter } from './routes/playground.routes';
 import { llmRouter } from './routes/llm.routes';
 import { ocrRouter } from './routes/ocr.routes';
+import { jobsRouter } from './routes/jobs.routes';
+import { initQueue } from './queue';
 
 dotenv.config();
 
@@ -98,6 +100,12 @@ mount('settings', settingsRouter);
 mount('playground', playgroundRouter);
 mount('llm', llmRouter);
 mount('ocr', ocrRouter);
+mount('jobs', jobsRouter);
+
+// Initialize background job queue (recover stuck jobs, register handlers)
+initQueue().catch((err: unknown) => {
+  console.error('[Queue] Failed to initialize:', err);
+});
 
 const healthRoute = API_BASE_PATH ? `${API_BASE_PATH}/health` : '/health';
 app.get(healthRoute, (_req, res) => {
