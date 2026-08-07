@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "DATABASE_URL=\"postgresql://placeholder\" DIRECT_URL=\"postgresql://placeholder\" npm install && npx prisma generate",
+  "installCommand": "DATABASE_URL=\"postgresql://placeholder\" DIRECT_URL=\"postgresql://placeholder\" npm install --include=dev && npx prisma generate",
   "functions": {
     "api/index.ts": {
       "maxDuration": 300,
