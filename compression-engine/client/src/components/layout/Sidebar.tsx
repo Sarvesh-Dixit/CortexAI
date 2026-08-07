@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import {
   LayoutDashboard, Minimize2, FileSearch, FileText, History,
   BarChart3, Code2, Settings, Info, HelpCircle, X, Zap,
@@ -65,16 +65,16 @@ export function Sidebar({ onClose, mobile }: SidebarProps) {
     >
       {/* Logo */}
       <div className="flex items-center justify-between p-4">
-        <div className={cn('flex items-center gap-2.5 overflow-hidden', collapsed && 'justify-center w-full')}>
+        <Link to="/" className={cn('flex items-center gap-2.5 overflow-hidden hover:opacity-80 transition-opacity', collapsed && 'justify-center w-full')}>
           <div className="w-8 h-8 rounded-lg gradient-button flex items-center justify-center flex-shrink-0">
             <Zap className="w-4.5 h-4.5 text-white" />
           </div>
           {!collapsed && (
             <span className="text-base font-bold gradient-text whitespace-nowrap">
-              CompressionAI
+              CortexAI
             </span>
           )}
-        </div>
+        </Link>
         {mobile && (
           <button
             onClick={onClose}

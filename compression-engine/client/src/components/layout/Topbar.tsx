@@ -46,7 +46,7 @@ export function Topbar({ onMobileMenuToggle }: TopbarProps) {
             <div className="w-7 h-7 rounded-lg gradient-button flex items-center justify-center">
               <Zap className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm font-semibold gradient-text">CompressionAI</span>
+            <span className="text-sm font-semibold gradient-text">CortexAI</span>
           </div>
         </div>
 
