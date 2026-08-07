@@ -102,10 +102,13 @@ mount('llm', llmRouter);
 mount('ocr', ocrRouter);
 mount('jobs', jobsRouter);
 
-// Initialize background job queue (recover stuck jobs, register handlers)
-initQueue().catch((err: unknown) => {
-  console.error('[Queue] Failed to initialize:', err);
-});
+// Initialize background job queue (skip on Vercel — serverless has no persistent process)
+const isServerless = Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
+if (!isServerless) {
+  initQueue().catch((err: unknown) => {
+    console.error('[Queue] Failed to initialize:', err);
+  });
+}
 
 const healthRoute = API_BASE_PATH ? `${API_BASE_PATH}/health` : '/health';
 app.get(healthRoute, (_req, res) => {
