@@ -4,7 +4,6 @@
   "installCommand": "DATABASE_URL=\"postgresql://placeholder\" DIRECT_URL=\"postgresql://placeholder\" npm install && npx prisma generate",
   "functions": {
     "src/app.ts": {
-      "runtime": "@vercel/node@3",
       "maxDuration": 300,
       "includeFiles": "{eng.traineddata,node_modules/tesseract.js-core/*.wasm,node_modules/tesseract.js-core/*.wasm.js,node_modules/.prisma/**,node_modules/@prisma/client/**}"
     }
