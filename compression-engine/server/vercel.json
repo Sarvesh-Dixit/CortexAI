@@ -1,19 +1,21 @@
 {
+  "framework": null,
+  "installCommand": "npm install && npx prisma generate",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist",
   "functions": {
-    "src/app.ts": {
+    "api/index.ts": {
       "runtime": "@vercel/node@3",
       "maxDuration": 300,
       "includeFiles": [
         "eng.traineddata",
         "node_modules/tesseract.js-core/*.wasm",
-        "node_modules/tesseract.js-core/*.wasm.js"
+        "node_modules/tesseract.js-core/*.wasm.js",
+        "node_modules/.prisma/**/*",
+        "node_modules/@prisma/client/**/*"
       ]
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/src/app.ts" }
-  ],
-  "installCommand": "npm install"
+    { "source": "/(.*)", "destination": "/api" }
+  ]
 }
