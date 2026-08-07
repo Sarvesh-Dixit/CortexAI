@@ -4,8 +4,6 @@ import { logger } from './utils/logger';
 
 dotenv.config();
 
-export { app };
-
 const PORT = process.env.PORT || 3001;
 
 if (isVercel) {
