@@ -66,17 +66,12 @@ authRouter.post('/register', async (req: Request, res: Response, next: NextFunct
 
     const hashedPassword = await bcrypt.hash(data.password, 12);
 
-    // Default to 'developer'. Admin role is never self-assigned — must be set manually via DB.
-    const requestedRole = data.role && data.role !== 'admin' ? data.role : 'developer';
-    const role = isRoleValid(requestedRole) ? requestedRole : 'developer';
-
     const user = await prisma.user.create({
       data: {
         id: uuid(),
         email: data.email,
         password: hashedPassword,
         name: data.name,
-        role: role as any,
       },
       select: { id: true, email: true, name: true, role: true, createdAt: true },
     });
@@ -99,7 +94,8 @@ authRouter.post('/register', async (req: Request, res: Response, next: NextFunct
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      next(new AppError(error.errors[0].message, 400));
+      const messages = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      next(new AppError(messages, 400));
     } else {
       next(error);
     }
