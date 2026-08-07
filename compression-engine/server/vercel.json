@@ -1,21 +1,21 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "npm install && npx prisma generate",
-  "buildCommand": "npm run build",
+  "installCommand": "DATABASE_URL=\"postgresql://placeholder\" DIRECT_URL=\"postgresql://placeholder\" npm install && npx prisma generate",
   "functions": {
-    "api/index.ts": {
+    "src/app.ts": {
       "runtime": "@vercel/node@3",
       "maxDuration": 300,
       "includeFiles": [
         "eng.traineddata",
         "node_modules/tesseract.js-core/*.wasm",
         "node_modules/tesseract.js-core/*.wasm.js",
-        "node_modules/.prisma/**/*",
-        "node_modules/@prisma/client/**/*"
+        "node_modules/.prisma/**",
+        "node_modules/@prisma/client/**"
       ]
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api" }
+    { "source": "/(.*)", "destination": "/src/app.ts" }
   ]
 }
