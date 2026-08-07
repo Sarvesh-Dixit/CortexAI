@@ -1,6 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rootDirectory": "compression-engine/server",
-  "buildCommand": "npm run build",
-  "installCommand": "npm install --include=dev"
+  "functions": {
+    "api/index.ts": {
+      "runtime": "nodejs18.x",
+      "maxDuration": 300,
+      "includeFiles": "compression-engine/server/eng.traineddata"
+    }
+  },
+  "installCommand": "cd compression-engine/server && npm install --include=dev",
+  "buildCommand": "cd compression-engine/server && npm run build"
 }
