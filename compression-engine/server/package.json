@@ -6,7 +6,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "npx prisma generate && npx tsc",
+    "build": "npx prisma generate && npx tsc --skipLibCheck",
     "postinstall": "npx prisma generate",
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
